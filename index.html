@@ -11,7 +11,7 @@
   <title>서재</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body data-theme="ivory" data-font="gothic">
@@ -19,10 +19,45 @@
   <div id="prog" aria-hidden="true"></div>
   <div id="running" aria-hidden="true"></div>
 
-  <!-- 서재 -->
-  <section id="library" class="view active" aria-label="서재">
+  <!-- 초기 화면 -->
+  <section id="home" class="view active" aria-label="초기 화면">
+    <div class="home-hero">
+      <p class="home-eyebrow">PERSONAL READING</p>
+      <h1 class="home-title">서재</h1>
+      <div class="home-rule"></div>
+      <p id="home-count" class="home-sub"></p>
+    </div>
+
+    <button class="resume" id="home-resume" hidden>
+      <span class="cover-s" aria-hidden="true"></span>
+      <span class="resume-body">
+        <span class="resume-label">이어 읽기</span>
+        <span class="resume-title" id="resume-title"></span>
+        <span class="resume-meta" id="resume-meta"></span>
+      </span>
+      <span class="resume-go" aria-hidden="true">›</span>
+    </button>
+
+    <nav class="home-actions" aria-label="시작하기">
+      <button class="home-btn" id="home-library">
+        <span class="orb" data-icon="books" aria-hidden="true"></span><span>서재</span>
+      </button>
+      <button class="home-btn" id="home-paste">
+        <span class="orb" data-icon="paste" aria-hidden="true"></span><span>붙여넣기</span>
+      </button>
+      <button class="home-btn" id="home-open">
+        <span class="orb" data-icon="folder" aria-hidden="true"></span><span>파일 열기</span>
+      </button>
+    </nav>
+  </section>
+
+  <!-- 서재 목록 -->
+  <section id="library" class="view" aria-label="서재">
     <header class="top">
-      <h1 class="brand">서재</h1>
+      <div class="top-l">
+        <button class="ico" id="btn-home" data-icon="back" aria-label="처음 화면" title="처음 화면"></button>
+        <h1 class="brand">서재</h1>
+      </div>
       <div class="actions">
         <button class="ico" id="btn-paste" data-icon="paste" aria-label="텍스트 붙여넣기" title="텍스트 붙여넣기"></button>
         <button class="ico" id="btn-open-lib" data-icon="folder" aria-label="파일 열기" title="파일 열기"></button>

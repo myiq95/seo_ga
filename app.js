@@ -12,17 +12,21 @@
   const fmtDate = (ts) => new Date(ts).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
   const anyPanelOpen = () => $('#toc').classList.contains('open') || $('#sheet').classList.contains('open');
 
+  // PDF 엔진은 npm 패키지(pdfjs-dist)를 jsDelivr에서 받습니다. CMap(한글 표)과 표준 글꼴이 같은 패키지에 들어 있어요.
+  const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174';
   const CDN = {
     jszip: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
-    pdf: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
-    pdfWorker: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
-    cmaps: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/'
+    pdf: `${PDFJS}/build/pdf.min.js`,
+    pdfWorker: `${PDFJS}/build/pdf.worker.min.js`,
+    cmaps: `${PDFJS}/cmaps/`,
+    fonts: `${PDFJS}/standard_fonts/`
   };
   const PALETTE = ['#8e7f6e', '#6f7f74', '#7c6f7f', '#9a8258', '#5e6b7b', '#8a6666', '#6e7a5c'];
   const THEME_COLOR = { light: '#fdfdfc', ivory: '#faf7f2', night: '#141414' };
 
   /* ================= 아이콘 (메뉴는 아이콘만 사용) ================= */
   const ICONS = {
+    books: '<rect x="4" y="5" width="4" height="14" rx="1"/><rect x="10" y="3" width="4" height="16" rx="1"/><path d="M17 6.5l3.2-.8 2.3 12.7-3.2.8z"/>',
     back: '<path d="M15 18l-6-6 6-6"/>',
     list: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',
     folder: '<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2.5h6.5A2.5 2.5 0 0 1 21 10v7.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/>',
@@ -207,8 +211,14 @@
   async function parsePdf(buf) {
     await loadScript(CDN.pdf);
     const lib = window.pdfjsLib;
-    lib.GlobalWorkerOptions.workerSrc = CDN.pdfWorker;
-    const pdf = await lib.getDocument({ data: new Uint8Array(buf), cMapUrl: CDN.cmaps, cMapPacked: true }).promise;
+    lib.GlobalWorkerOptions.workerSrc = await pdfWorkerUrl();
+    // CMap(한글 글자 표)을 못 읽으면 한글 글자가 빈 값으로 나와서 조용히 사라집니다.
+    const pdf = await lib.getDocument({
+      data: new Uint8Array(buf),
+      cMapUrl: CDN.cmaps,
+      cMapPacked: true,
+      standardFontDataUrl: CDN.fonts
+    }).promise;
     const blocks = [];
     for (let p = 1; p <= pdf.numPages; p++) {
       const page = await pdf.getPage(p);
@@ -347,6 +357,17 @@
     return loaded[url];
   }
 
+  // PDF 워커를 교차 출처 주소로 직접 띄우면 실패할 수 있어서, 받은 내용을 Blob 주소로 바꿔 띄웁니다.
+  let pdfWorkerBlob = null;
+  async function pdfWorkerUrl() {
+    if (!pdfWorkerBlob) {
+      const res = await fetch(CDN.pdfWorker, { mode: 'cors' });
+      if (!res.ok) throw new Error('PDF 엔진을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.');
+      pdfWorkerBlob = URL.createObjectURL(new Blob([await res.text()], { type: 'text/javascript' }));
+    }
+    return pdfWorkerBlob;
+  }
+
   /* ================= 서재 화면 ================= */
   async function renderShelf() {
     const shelf = $('#shelf');
@@ -371,6 +392,20 @@
       </article>`;
     }).join('');
     hydrateIcons(shelf);
+  }
+
+  /* ================= 초기 화면 ================= */
+  async function renderHome() {
+    const metas = (await DB.allMeta()).sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));
+    $('#home-count').textContent = metas.length ? `서재에 ${metas.length}권이 있어요` : '아직 서재가 비어 있어요';
+    const card = $('#home-resume');
+    if (!metas.length) { card.hidden = true; return; }
+    const last = metas[0];
+    const pct = Math.round((last.pct || 0) * 100);
+    card.dataset.id = last.id;
+    $('#resume-title').textContent = last.title;
+    $('#resume-meta').textContent = pct ? `${pct}% 읽었어요` : '아직 읽지 않았어요';
+    card.hidden = false;
   }
 
   async function removeBook(id) {
@@ -467,11 +502,12 @@
   }
 
   function showView(v) {
-    $('#library').classList.toggle('active', v === 'library');
-    $('#reader').classList.toggle('active', v === 'reader');
+    ['home', 'library', 'reader'].forEach((name) => $('#' + name).classList.toggle('active', name === v));
     document.body.classList.toggle('reading', v === 'reader');
     $('#prog').style.width = '0%';
-    if (v === 'library') { closePanels(); document.title = '서재'; }
+    if (v !== 'reader') closePanels();
+    document.title = v === 'reader' && book ? `${book.title} · 서재` : '서재';
+    window.scrollTo(0, 0);
   }
 
   function renderBook() {
@@ -785,6 +821,11 @@
   function bindUI() {
     $('#btn-paste').onclick = openPaste;
     $('#btn-open-lib').onclick = () => $('#file').click();
+    $('#btn-home').onclick = () => { showView('home'); renderHome(); };
+    $('#home-library').onclick = () => { showView('library'); renderShelf(); };
+    $('#home-paste').onclick = openPaste;
+    $('#home-open').onclick = () => $('#file').click();
+    $('#home-resume').onclick = () => { const id = $('#home-resume').dataset.id; if (id) openBook(id); };
 
     $('#shelf').addEventListener('click', (e) => {
       const del = e.target.closest('[data-del]');
@@ -865,8 +906,8 @@
         navigator.serviceWorker.register('sw.js').catch((err) => console.warn('서비스 워커 등록 실패', err));
       });
     }
-    showView('library');
-    renderShelf();
+    showView('home');
+    renderHome();
   }
 
   init();
